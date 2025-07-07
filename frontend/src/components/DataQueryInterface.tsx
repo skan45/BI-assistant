@@ -1,5 +1,7 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,45 +14,53 @@ interface ChatResponse {
 
 const DataQueryInterface = () => {
   const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState('');
+  const [fullAnswer, setFullAnswer] = useState('');
+  const [displayedAnswer, setDisplayedAnswer] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Typing animation effect
+  useEffect(() => {
+    if (!fullAnswer) return;
+
+    let i = 0;
+    const interval = setInterval(() => {
+      setDisplayedAnswer(fullAnswer.slice(0, i));
+      i++;
+      if (i > fullAnswer.length) clearInterval(interval);
+    }, 10); // speed of typing
+
+    return () => clearInterval(interval);
+  }, [fullAnswer]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!question.trim()) {
       toast.error('Please enter a question before asking!');
       return;
     }
 
     setIsLoading(true);
-    setAnswer('');
+    setFullAnswer('');
+    setDisplayedAnswer('');
 
     try {
-      console.log('Sending question to chatbot:', question);
-      
-      const response = await fetch('http://localhost:5000/ask', {
+      const response = await fetch('http://localhost:5000/query', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ question: question.trim() }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: question.trim() }),
       });
-
-      console.log('Response status:', response.status);
 
       if (!response.ok) {
         throw new Error(`Server responded with status: ${response.status}`);
       }
 
       const data: ChatResponse = await response.json();
-      console.log('Received answer:', data.answer);
-      
-      setAnswer(data.answer);
+      setFullAnswer(data.answer);
       toast.success('Got your answer!');
     } catch (error) {
       console.error('Error connecting to chatbot:', error);
-      toast.error('Sorry, I couldn\'t connect to the data assistant. Please make sure the server is running on http://localhost:5000');
+      toast.error('Sorry, I couldn\'t connect to the data assistant. Make sure the server is running.');
     } finally {
       setIsLoading(false);
     }
@@ -94,7 +104,7 @@ const DataQueryInterface = () => {
                 </label>
                 <Textarea
                   id="question"
-                  placeholder="For example: 'What are the top-selling products?' or 'Which dimensions are used in the sales fact table?'"
+                  placeholder="e.g., What are the top-selling products?"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
                   onKeyPress={handleKeyPress}
@@ -102,7 +112,7 @@ const DataQueryInterface = () => {
                   disabled={isLoading}
                 />
               </div>
-              
+
               <Button 
                 type="submit" 
                 disabled={isLoading || !question.trim()}
@@ -125,7 +135,7 @@ const DataQueryInterface = () => {
         </Card>
 
         {/* Answer Display */}
-        {(answer || isLoading) && (
+        {(displayedAnswer || isLoading) && (
           <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
             <CardHeader className="pb-4">
               <CardTitle className="text-xl text-gray-700">Answer</CardTitle>
@@ -139,12 +149,12 @@ const DataQueryInterface = () => {
                   </div>
                 </div>
               ) : (
-                <div className="prose prose-lg max-w-none">
-                  <div className="bg-blue-50 border-l-4 border-blue-400 p-6 rounded-r-lg">
-                    <p className="text-gray-800 text-base leading-relaxed whitespace-pre-wrap">
-                      {answer}
-                    </p>
-                  </div>
+                <div className="prose prose-blue prose-lg max-w-none text-gray-800 transition-all whitespace-pre-wrap">
+                  <ReactMarkdown 
+                    children={displayedAnswer} 
+                    remarkPlugins={[remarkGfm]} 
+                    rehypePlugins={[rehypeRaw]} 
+                  />
                 </div>
               )}
             </CardContent>
@@ -158,8 +168,8 @@ const DataQueryInterface = () => {
           </CardHeader>
           <CardContent className="text-green-700">
             <ul className="space-y-2 text-sm">
-              <li>• Ask specific questions about your data, like "What are our best-selling products?"</li>
-              <li>• You can ask about database structure, like "What tables do we have?"</li>
+              <li>• Ask specific questions like "What are our best-selling products?"</li>
+              <li>• You can ask about database structure like "What tables do we have?"</li>
               <li>• Try questions about relationships: "How are customers connected to orders?"</li>
               <li>• Don't worry about technical terms - just ask naturally!</li>
             </ul>
